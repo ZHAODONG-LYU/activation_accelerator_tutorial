@@ -5,6 +5,8 @@ This tutorial will introduce how to design an activation accelerator using hls, 
 The full flow can be divided into four steps: Generate HLS IP, Generate bitstream, PYNQ environment setup, Verification with PYNQ.
 Executing these four steps in sequence will allow you to successfully run the baseline version.
 
+The baseline version is based on Vitis HLS 2022.2.
+
 ## Generate HLS IP
 
 The source files of activation accelerator baseline version and the tcl script are stored in `prj/baseline/kernel_hls`
@@ -42,11 +44,11 @@ vitis_hls -f run_hls.tcl
 The need files will be generated in the right location -- `/prj/baseline/kernel_hls/activation_accelerator/baseline/impl/ip` -- for the next step's script -- `Generate bitstream: /prj/baseline/overlay/ run_vivado.tcl`
 
 By the way, you can also use GUI to get the same outcome. Generally, the GUI flow includes create project, ad source files, add testbench, select kv 260 SoM Kit, CSim, CSyn, CoSim and Export RTL.
-You need to ensure all steps passed whatever linux or GUI flow.
+You need to ensure all steps passed whatever linux tcl or GUI flow.
 
 ## Generate bitstream
 
-In linux flow, you can use only one script to generate correct bitstream if you have done the IP core correctly. The script is stored in `/prj/baseline/oberlay_vivado/run_vivado.tcl`.
+In linux tcl flow, you can use only one script to generate correct bitstream if you have done the IP core correctly. The script is stored in `/prj/baseline/oberlay_vivado/run_vivado.tcl`.
 
 Run
 
