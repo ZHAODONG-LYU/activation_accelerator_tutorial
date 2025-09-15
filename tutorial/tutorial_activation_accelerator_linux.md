@@ -172,5 +172,5 @@ Related baseline PYNQ test can be found in `activation_acc/notebook`
 
 ## Reference
 
-[Getting Started with Certified Ubuntu 22.04 LTS for Xilinx Devices - Xilinx Wiki - Confluence](https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/2363129857/Getting+Started+with+Certified+Ubuntu+22.04+LTS+for+Xilinx+Devices)
+[Getting Started with Certified Ubuntu 22.04 LTS for Xilinx Devices - Xilinx Wiki - Confluence](https://xilinx-wiki.atlassian.net/wiki/spaces/A/pages/2363129857/Getting+Started+with+Certified+Ubuntu+22.04+LTS+for+Xilinx+Devices) \
 [Clash for Ubuntu Tutorial | Devpn Got Freedom](https://devpn.github.io/docs/start/ubuntu/clash/)
