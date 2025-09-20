@@ -35,7 +35,7 @@ Use simple, predictable inputs whose output results are easy to verify manually 
 * All-Zero input: `[0.0, 0.0, ..., 0.0]`. The output should be $[\frac{1}{D}, ..., \frac{1}{D}]$.
 * A row with a single element as 1 and the rest as 0: For example, `[0.0, 1.0, 0.0, ...]`. Verify the exponential normalization and the "subtract the maximum" logic for overflow prevention.
 * Rows with all identical elements: For example, `[2.5, 2.5, ..., 2.5]`. The output should be $[\frac{1}{D}, ..., \frac{1}{D}]$.
-* Cases where input values vary significantly: For example, `[0.0, 0.0, 10.0, 0.0]` or `[100.0, 101.0, 102.0]`. Test the stability of exp calculation and max subtraction operations to ensure the output sums to 1.
+* Cases where input values vary significantly: For example, `[0.0, 0.0, 10.0, 0.0]` or `[100.0, 101.0, 102.0]`. Test the stability of `exp` calculation and max subtraction operations to ensure the output sums to 1.
 
 #### LayerNorm/RMSNorm
 
@@ -310,37 +310,40 @@ We will divide the 64 rows of X_test_tensor into the following categories and de
      * Row 45: Containing `Inf/-Inf/NaN`
        * Content: Random numbers with injected `+Inf`, `-Inf`, `NaN`.
        * Purpose: Verify the handling of special values by the `erf` approximation and multiplication operations.
+   * **Elementwise Add/Multiply (8 rows - as operand X)**
+     These rows serve as the first input X for Elementwise Add and Elementwise Multiply. The test script will generate the corresponding second input Y to form a complete test case.
 
-    * **Elementwise Add/Multiply (8 rows - as operand X)**
-        These rows serve as the first input X for Elementwise Add and Elementwise Multiply. The test script will generate the corresponding second input Y to form a complete test case.
-        * Row 46: Random Positive Numbers
-            * Content: Random numbers uniformly distributed in the range `[0.0, 10.0]`.
-            * Purpose: General addition/multiplication test.
-        * Row 47: Random Negative Numbers
-            * Content: Random numbers uniformly distributed in the range `[-10.0, 0.0]`.
-            * Purpose: General addition/multiplication test.
-        * Row 48: Large Values
-            * Content: Random numbers uniformly distributed in the range `[BF16_MAX/2, BF16_MAX]`.
-            * Purpose: To be used with Y to test overflow.
-        * Row 49: Small Values
-            * Content: Random numbers uniformly distributed in the range `[BF16_MIN_NORMAL, BF16_MIN_NORMAL*10]`.
-            * Purpose: To be used with Y to test underflow.
-        * Row 50: Containing `+Inf`
-            * Content: Random numbers with injected `+Inf`.
-            * Purpose: To be used with Y to test `Inf + (-Inf)` or `0 * Inf`, etc.
-        * Row 51: Containing `-Inf`
-            * Content: Random numbers with injected `-Inf`.
-            * Purpose: To be used with Y to test `Inf + (-Inf)`, etc.
-        * Row 52: Containing `NaN`
-            * Content: Random numbers with injected `NaN`.
-            * Purpose: To be used with Y to test `NaN` propagation.
-        * Row 53: Containing `0.0`
-            * Content: Random numbers with injected `0.0`.
-            * Purpose: To be used with Y to test `0 * Inf`, etc.
-
+     * Row 46: Random Positive Numbers
+       * Content: Random numbers uniformly distributed in the range `[0.0, 10.0]`.
+       * Purpose: General addition/multiplication test.
+     * Row 47: Random Negative Numbers
+       * Content: Random numbers uniformly distributed in the range `[-10.0, 0.0]`.
+       * Purpose: General addition/multiplication test.
+     * Row 48: Large Values
+       * Content: Random numbers uniformly distributed in the range `[BF16_MAX/2, BF16_MAX]`.
+       * Purpose: To be used with Y to test overflow.
+     * Row 49: Small Values
+       * Content: Random numbers uniformly distributed in the range `[BF16_MIN_NORMAL, BF16_MIN_NORMAL*10]`.
+       * Purpose: To be used with Y to test underflow.
+     * Row 50: Containing `+Inf`
+       * Content: Random numbers with injected `+Inf`.
+       * Purpose: To be used with Y to test `Inf + (-Inf)` or `0 * Inf`, etc.
+     * Row 51: Containing `-Inf`
+       * Content: Random numbers with injected `-Inf`.
+       * Purpose: To be used with Y to test `Inf + (-Inf)`, etc.
+     * Row 52: Containing `NaN`
+       * Content: Random numbers with injected `NaN`.
+       * Purpose: To be used with Y to test `NaN` propagation.
+     * Row 53: Containing `0.0`
+       * Content: Random numbers with injected `0.0`.
+       * Purpose: To be used with Y to test `0 * Inf`, etc.
 4. **Remaining Rows (10 rows)**
-    * Rows 54-63: More Random or Complex Patterns
-        * Content: Can be filled with random numbers from different distributions (e.g., log-normal distribution), different numerical ranges, or by repeating some existing test cases with different random seeds to increase test breadth. You can also design some "pathological" inputs, such as alternating extremely large and small values, to test for potential issues in pipelines and resource reuse.
+
+   * Rows 54-63: More Random or Complex Patterns
+     * Content: Can be filled with random numbers from different distributions (e.g., log-normal distribution), different numerical ranges, or by repeating some existing test cases with different random seeds to increase test breadth. You can also design some "pathological" inputs, such as alternating extremely large and small values, to test for potential issues in pipelines and resource reuse.
+
+
+A set of sample script and testvector have been saved in `/prj/testvector_example`.
 
 
 #### Responsibilities of the Test Script
@@ -359,3 +362,5 @@ During the actual testing process, your Python test script will:
   Read the computation results Y_fpga from the FPGA.
 * Compare Results
   Convert Y_fpga to bfloat16 floating-point numbers and compare them with Y_ref, compute the relative L2 error $\epsilon_f$, and evaluate the accuracy score $A_f$ according to the scoring criteria. At the same time, perform an element-by-element precise comparison for special values.
+
+
