@@ -109,6 +109,4 @@ If needed, you can use our provided `test.py` script to inspect the generated ve
 
 Free to use for research and engineering validation. Attribution appreciated.
 
----
 
-If you need alternative packing (column-major, per-row files, fixed 128-byte packets) or an **auto-verify** mode after generation, share your DMA/AXI constraints and I’ll provide a minimal patch.
