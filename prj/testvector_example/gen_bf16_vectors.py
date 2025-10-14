@@ -457,47 +457,76 @@ def build_Y_for_ewise(X: torch.Tensor, rng: np.random.Generator) -> torch.Tensor
 # ------------------------------
 # 参考实现（PyTorch）
 # ------------------------------
-def ref_softmax(x_bf16: torch.Tensor, dim=-1) -> torch.Tensor:
-    x = x_bf16.to(torch.float32)
-    # 按常规做数值稳定 softmax
-    x = x - nanmax(x, dim=dim, keepdim=True)
-    y = torch.exp(x)
-    denom = nansum(y, dim=dim, keepdim=True)
-    out = y / denom
-    return out.to(torch.bfloat16)
+# def ref_softmax(x_bf16: torch.Tensor, dim=-1) -> torch.Tensor:
+#     x = x_bf16.to(torch.float32)
+#     # 按常规做数值稳定 softmax
+#     x = x - nanmax(x, dim=dim, keepdim=True)
+#     y = torch.exp(x)
+#     denom = nansum(y, dim=dim, keepdim=True)
+#     out = y / denom
+#     return out.to(torch.bfloat16)
 
-def ref_layernorm(x_bf16: torch.Tensor, eps=1e-5, D=None) -> torch.Tensor:
-    x = x_bf16.to(torch.float32)
-    if D is None:
-        D = x.shape[-1]
-    mean = nanmean(x, dim=-1, keepdim=True)
-    var = nanmean((x - mean) ** 2, dim=-1, keepdim=True)
-    out = (x - mean) / torch.sqrt(var + eps)
-    return out.to(torch.bfloat16)
+# def ref_layernorm(x_bf16: torch.Tensor, eps=1e-5, D=None) -> torch.Tensor:
+#     x = x_bf16.to(torch.float32)
+#     if D is None:
+#         D = x.shape[-1]
+#     mean = nanmean(x, dim=-1, keepdim=True)
+#     var = nanmean((x - mean) ** 2, dim=-1, keepdim=True)
+#     out = (x - mean) / torch.sqrt(var + eps)
+#     return out.to(torch.bfloat16)
 
-def ref_rmsnorm(x_bf16: torch.Tensor, eps=1e-5) -> torch.Tensor:
+# def ref_rmsnorm(x_bf16: torch.Tensor, eps=1e-5) -> torch.Tensor:
+#     x = x_bf16.to(torch.float32)
+#     msq = nanmean(x**2, dim=-1, keepdim=True)
+#     out = x / torch.sqrt(msq + eps)
+#     return out.to(torch.bfloat16)
+
+# def ref_silu(x_bf16: torch.Tensor) -> torch.Tensor:
+#     x = x_bf16.to(torch.float32)
+#     out = x * torch.sigmoid(x)
+#     return out.to(torch.bfloat16)
+
+# def ref_gelu(x_bf16: torch.Tensor, approximate='tanh') -> torch.Tensor:
+#     x = x_bf16.to(torch.float32)
+#     # 使用 PyTorch 的近似实现（默认 approximate='tanh'）
+#     out = F.gelu(x, approximate=approximate)
+#     return out.to(torch.bfloat16)
+
+# def ref_add(x_bf16: torch.Tensor, y_bf16: torch.Tensor) -> torch.Tensor:
+#     return (x_bf16.to(torch.float32) + y_bf16.to(torch.float32)).to(torch.bfloat16)
+
+# def ref_mul(x_bf16: torch.Tensor, y_bf_16: torch.Tensor) -> torch.Tensor:
+#     return (x_bf16.to(torch.float32) * y_bf16.to(torch.float32)).to(torch.bfloat16)
+
+def ref_softmax(x_bf16: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    # F.softmax 内部已做数值稳定，不需要手动减 max
+    return F.softmax(x_bf16.to(torch.float32), dim=dim).to(torch.bfloat16)
+
+def ref_layernorm(x_bf16: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
     x = x_bf16.to(torch.float32)
-    msq = nanmean(x**2, dim=-1, keepdim=True)
-    out = x / torch.sqrt(msq + eps)
-    return out.to(torch.bfloat16)
+    # F.layer_norm 需要传入 normalized_shape（最后一维的长度）
+    return F.layer_norm(x, normalized_shape=(x.shape[-1],), eps=eps).to(torch.bfloat16)
+
+def ref_rmsnorm(x_bf16: torch.Tensor, eps: float = 1e-5) -> torch.Tensor:
+    x = x_bf16.to(torch.float32)
+    # 优先用内置（PyTorch 新版提供 F.rms_norm）；否则回退到等价实现
+    if hasattr(F, "rms_norm"):
+        return F.rms_norm(x, normalized_shape=(x.shape[-1],), eps=eps).to(torch.bfloat16)
+    # fallback：x / sqrt(mean(x^2) + eps)
+    rms = torch.sqrt(torch.mean(x * x, dim=-1, keepdim=True) + eps)
+    return (x / rms).to(torch.bfloat16)
 
 def ref_silu(x_bf16: torch.Tensor) -> torch.Tensor:
-    x = x_bf16.to(torch.float32)
-    out = x * torch.sigmoid(x)
-    return out.to(torch.bfloat16)
+    return F.silu(x_bf16.to(torch.float32)).to(torch.bfloat16)
 
-def ref_gelu(x_bf16: torch.Tensor, approximate='tanh') -> torch.Tensor:
-    x = x_bf16.to(torch.float32)
-    # 使用 PyTorch 的近似实现（默认 approximate='tanh'）
-    out = F.gelu(x, approximate=approximate)
-    return out.to(torch.bfloat16)
+def ref_gelu(x_bf16: torch.Tensor, approximate: str = "tanh") -> torch.Tensor:
+    return F.gelu(x_bf16.to(torch.float32), approximate=approximate).to(torch.bfloat16)
 
 def ref_add(x_bf16: torch.Tensor, y_bf16: torch.Tensor) -> torch.Tensor:
-    return (x_bf16.to(torch.float32) + y_bf16.to(torch.float32)).to(torch.bfloat16)
+    return torch.add(x_bf16.to(torch.float32), y_bf16.to(torch.float32)).to(torch.bfloat16)
 
 def ref_mul(x_bf16: torch.Tensor, y_bf16: torch.Tensor) -> torch.Tensor:
-    return (x_bf16.to(torch.float32) * y_bf16.to(torch.float32)).to(torch.bfloat16)
-
+    return torch.mul(x_bf16.to(torch.float32), y_bf16.to(torch.float32)).to(torch.bfloat16)
 # ------------------------------
 # 主流程
 # ------------------------------
@@ -525,8 +554,12 @@ def main():
     X_bf16 = f32_to_bf16(X_f32)
 
     # 2) 生成 Y（仅 46–53 行有效）
-    Y_bf16 = torch.zeros_like(X_bf16)
-    Y_bf16 = build_Y_for_ewise(X_bf16, rng)
+    # Y_bf16 = torch.zeros_like(X_bf16)
+    Y_bf16 = X_bf16.clone()                                      # 行 0..N-1 先与 X 相同
+    Y_pair = build_Y_for_ewise(X_bf16, rng)                      # 只在 46–53 行有意义
+    lo, hi = 46, 54
+    Y_bf16[lo:hi] = Y_pair[lo:hi]                                # 用专用逻辑覆盖 46–53
+    # Y_bf16 = build_Y_for_ewise(X_bf16, rng)
 
     # 3) 导出位模式（uint16）
     X_bits = to_bf16_bits(X_bf16)
@@ -549,41 +582,120 @@ def main():
 
     # 5) 可选：生成七类算子的参考输出
     if args.emit_ref:
-        # Softmax（对所有 64 行都算，便于统一对比）
-        softmax_ref_bf16 = ref_softmax(X_bf16, dim=1)
-        softmax_ref_f32  = bf16_to_f32(softmax_ref_bf16)
-        torch.save(softmax_ref_bf16, os.path.join(args.outdir, "ref_softmax_bf16.pt"))
-        torch.save(softmax_ref_f32,  os.path.join(args.outdir, "ref_softmax_f32.pt"))
+        # ---- 行号集合 ----
+        COMMON = list(range(0, 20)) + list(range(54, 64))
+        SPEC = {
+            "softmax":   list(range(20, 26)),
+            "layernorm": list(range(26, 32)),
+            "rmsnorm":   list(range(32, 38)),
+            "silu":      list(range(38, 42)),
+            "gelu":      list(range(42, 46)),
+            "addmul":    list(range(46, 54)),
+        }
+        # 每个一元激活的“实际参与计算的行”：通用行 ∪ 专属行
+        ROWS = {
+            "softmax":   sorted(set(COMMON) | set(SPEC["softmax"])),
+            "layernorm": sorted(set(COMMON) | set(SPEC["layernorm"])),
+            "rmsnorm":   sorted(set(COMMON) | set(SPEC["rmsnorm"])),
+            "silu":      sorted(set(COMMON) | set(SPEC["silu"])),
+            "gelu":      sorted(set(COMMON) | set(SPEC["gelu"])),
+            # 对于 Add/Mul 保持你原策略：仅 46–53 行
+            "addmul":    sorted(set(COMMON) | set(SPEC["addmul"])),
+        }
+        def scatter_unary(op_fn, rows, x_bf16, **kwargs):
+            """只在给定 rows 上计算 op，其他行保持 0。返回与 x 同形状的 bf16 Tensor。"""
+            out = torch.zeros_like(x_bf16)
+            if len(rows) > 0:
+                out[rows] = op_fn(x_bf16[rows], **kwargs)
+            return out
+        def scatter_binary(op_fn, rows, x_bf16, y_bf16, **kwargs):
+            out = torch.zeros_like(x_bf16)
+            if len(rows) > 0:
+                out[rows] = op_fn(x_bf16[rows], y_bf16[rows], **kwargs)
+            return out
 
-        # LayerNorm/RMSNorm（对所有 64 行计算，eps=1e-5）
-        ln_ref_bf16  = ref_layernorm(X_bf16, eps=1e-5, D=D)
-        ln_ref_f32   = bf16_to_f32(ln_ref_bf16)
-        rms_ref_bf16 = ref_rmsnorm(X_bf16, eps=1e-5)
-        rms_ref_f32  = bf16_to_f32(rms_ref_bf16)
-        torch.save(ln_ref_bf16,  os.path.join(args.outdir, "ref_layernorm_bf16.pt"))
-        torch.save(ln_ref_f32,   os.path.join(args.outdir, "ref_layernorm_f32.pt"))
-        torch.save(rms_ref_bf16, os.path.join(args.outdir, "ref_rmsnorm_bf16.pt"))
-        torch.save(rms_ref_f32,  os.path.join(args.outdir, "ref_rmsnorm_f32.pt"))
+        # ---- Softmax（仅在 ROWS['softmax'] 上算）----
+        softmax_ref_bf16 = scatter_unary(ref_softmax, ROWS["softmax"], X_bf16, dim=1)
+        torch.save(softmax_ref_bf16,               os.path.join(args.outdir, "ref_softmax_bf16.pt"))
+        torch.save(bf16_to_f32(softmax_ref_bf16),  os.path.join(args.outdir, "ref_softmax_f32.pt"))
 
-        # SiLU / GELU
-        silu_ref_bf16 = ref_silu(X_bf16)
-        silu_ref_f32  = bf16_to_f32(silu_ref_bf16)
-        gelu_ref_bf16 = ref_gelu(X_bf16, approximate='tanh')
-        gelu_ref_f32  = bf16_to_f32(gelu_ref_bf16)
-        torch.save(silu_ref_bf16, os.path.join(args.outdir, "ref_silu_bf16.pt"))
-        torch.save(silu_ref_f32,  os.path.join(args.outdir, "ref_silu_f32.pt"))
-        torch.save(gelu_ref_bf16, os.path.join(args.outdir, "ref_gelu_bf16.pt"))
-        torch.save(gelu_ref_f32,  os.path.join(args.outdir, "ref_gelu_f32.pt"))
+        # ---- LayerNorm / RMSNorm（仅在各自行上算；eps=1e-5）----
+        ln_ref_bf16  = scatter_unary(ref_layernorm, ROWS["layernorm"], X_bf16, eps=1e-5)
+        rms_ref_bf16 = scatter_unary(ref_rmsnorm,   ROWS["rmsnorm"],   X_bf16, eps=1e-5)
+        torch.save(ln_ref_bf16,              os.path.join(args.outdir, "ref_layernorm_bf16.pt"))
+        torch.save(bf16_to_f32(ln_ref_bf16), os.path.join(args.outdir, "ref_layernorm_f32.pt"))
+        torch.save(rms_ref_bf16,              os.path.join(args.outdir, "ref_rmsnorm_bf16.pt"))
+        torch.save(bf16_to_f32(rms_ref_bf16), os.path.join(args.outdir, "ref_rmsnorm_f32.pt"))
 
-        # Elementwise Add / Mul（仅针对 46–53 行，其他行输出 0）
-        add_ref_bf16 = torch.zeros_like(X_bf16)
-        mul_ref_bf16 = torch.zeros_like(X_bf16)
-        add_ref_bf16[46:54] = ref_add(X_bf16[46:54], Y_bf16[46:54])
-        mul_ref_bf16[46:54] = ref_mul(X_bf16[46:54], Y_bf16[46:54])
-        torch.save(add_ref_bf16, os.path.join(args.outdir, "ref_add_bf16.pt"))
-        torch.save(mul_ref_bf16, os.path.join(args.outdir, "ref_mul_bf16.pt"))
-        torch.save(bf16_to_f32(add_ref_bf16), os.path.join(args.outdir, "ref_add_f32.pt"))
-        torch.save(bf16_to_f32(mul_ref_bf16), os.path.join(args.outdir, "ref_mul_f32.pt"))
+        # ---- SiLU / GELU（仅在各自行上算）----
+        silu_ref_bf16 = scatter_unary(ref_silu, ROWS["silu"], X_bf16)
+        gelu_ref_bf16 = scatter_unary(ref_gelu, ROWS["gelu"], X_bf16, approximate='tanh')
+        torch.save(silu_ref_bf16,              os.path.join(args.outdir, "ref_silu_bf16.pt"))
+        torch.save(bf16_to_f32(silu_ref_bf16), os.path.join(args.outdir, "ref_silu_f32.pt"))
+        torch.save(gelu_ref_bf16,              os.path.join(args.outdir, "ref_gelu_bf16.pt"))
+        torch.save(bf16_to_f32(gelu_ref_bf16), os.path.join(args.outdir, "ref_gelu_f32.pt"))
+
+        # ---- Elementwise Add / Mul：仍然仅 46–53 行，其它行置 0 ----
+
+        add_ref_bf16 = scatter_binary(ref_add, ROWS["addmul"], X_bf16, Y_bf16)
+        mul_ref_bf16 = scatter_binary(ref_mul, ROWS["addmul"], X_bf16, Y_bf16)
+        torch.save(add_ref_bf16,                 os.path.join(args.outdir, "ref_add_bf16.pt"))
+        torch.save(mul_ref_bf16,                 os.path.join(args.outdir, "ref_mul_bf16.pt"))
+        torch.save(bf16_to_f32(add_ref_bf16),    os.path.join(args.outdir, "ref_add_f32.pt"))
+        torch.save(bf16_to_f32(mul_ref_bf16),    os.path.join(args.outdir, "ref_mul_f32.pt"))
+
+        def save_ref_pack(name, t_bf16: torch.Tensor):
+            # 1) PyTorch
+            torch.save(t_bf16, os.path.join(args.outdir, f"{name}_bf16.pt"))
+            torch.save(bf16_to_f32(t_bf16), os.path.join(args.outdir, f"{name}_f32.pt"))
+            # 2) 位流/NPY（bf16 的 16bit bitstream）
+            bits = to_bf16_bits(t_bf16)
+            bits.tofile(os.path.join(args.outdir, f"{name}_bf16.bin"))
+            np.save(os.path.join(args.outdir, f"{name}_bf16_bits.npy"), bits)
+        # ========== 新增：另存为 golden_out_config_i_* 的名字 ==========
+        def save_as_golden(config_idx: int, t_bf16: torch.Tensor, outdir: str, also_pt_f32: bool = False):
+            """把同一个 bf16 Tensor 另存为 golden_out_config_<i>_bf16.bin
+            如果 also_pt_f32=True，则同时额外保存 .pt/.f32 版本（可选）。"""
+            # 保存 .bin（uint16 原始位流）
+            bits = to_bf16_bits(t_bf16)
+            bits.tofile(os.path.join(outdir, f"golden_out_config_{config_idx}_bf16.bin"))
+            if also_pt_f32:
+                torch.save(t_bf16, os.path.join(outdir, f"golden_out_config_{config_idx}_bf16.pt"))
+                torch.save(bf16_to_f32(t_bf16), os.path.join(outdir, f"golden_out_config_{config_idx}_f32.pt"))
+        OP2CFG = {
+            "softmax":    0,
+            "silu":       1,
+            "rmsnorm":    2,
+            "layernorm":  3,
+            "gelu":       4, 
+            "add":        5,
+            "mul":        6,      # 同上
+        }
+
+        save_ref_pack("ref_softmax", softmax_ref_bf16)
+        save_ref_pack("ref_layernorm", ln_ref_bf16)
+        save_ref_pack("ref_rmsnorm", rms_ref_bf16)
+        save_ref_pack("ref_silu", silu_ref_bf16)
+        save_ref_pack("ref_gelu", gelu_ref_bf16)
+        save_ref_pack("ref_add", add_ref_bf16)
+        save_ref_pack("ref_mul", mul_ref_bf16)
+
+        # 再按“golden_out_config_i”的旧风格额外保存一份（关键改动在这里）
+        if "add" in OP2CFG:
+            save_as_golden(OP2CFG["add"], add_ref_bf16, args.outdir, also_pt_f32=False)
+        if "softmax" in OP2CFG:
+            save_as_golden(OP2CFG["softmax"], softmax_ref_bf16, args.outdir, also_pt_f32=False)
+        if "layernorm" in OP2CFG:
+            save_as_golden(OP2CFG["layernorm"], ln_ref_bf16, args.outdir, also_pt_f32=False)
+        if "rmsnorm" in OP2CFG:
+            save_as_golden(OP2CFG["rmsnorm"], rms_ref_bf16, args.outdir, also_pt_f32=False)
+        if "silu" in OP2CFG:
+            save_as_golden(OP2CFG["silu"], silu_ref_bf16, args.outdir, also_pt_f32=False)
+        if "gelu" in OP2CFG:
+            save_as_golden(OP2CFG["gelu"], gelu_ref_bf16, args.outdir, also_pt_f32=False)
+        if "mul" in OP2CFG:
+            save_as_golden(OP2CFG["mul"], mul_ref_bf16, args.outdir, also_pt_f32=False)
+
 
         print("[OK] Saved PyTorch reference outputs (bf16 & f32).")
 

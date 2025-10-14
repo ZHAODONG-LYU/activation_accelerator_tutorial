@@ -1,7 +1,7 @@
 import numpy as np, torch
 
 N, D = 64, 768
-path = "/data1/jcz/FPGA/bf16_vectors/X_test_tensor_bf16.bin"
+path = "xxxxxxx/bf16_vectors/X_test_tensor_bf16.bin"
 
 # 读作 uint16 位型并 reshape
 bits = np.fromfile(path, dtype=np.uint16).reshape(N, D)
