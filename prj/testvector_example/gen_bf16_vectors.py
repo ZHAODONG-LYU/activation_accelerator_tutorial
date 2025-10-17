@@ -582,67 +582,34 @@ def main():
 
     # 5) 可选：生成七类算子的参考输出
     if args.emit_ref:
-        # ---- 行号集合 ----
-        COMMON = list(range(0, 20)) + list(range(54, 64))
-        SPEC = {
-            "softmax":   list(range(20, 26)),
-            "layernorm": list(range(26, 32)),
-            "rmsnorm":   list(range(32, 38)),
-            "silu":      list(range(38, 42)),
-            "gelu":      list(range(42, 46)),
-            "addmul":    list(range(46, 54)),
-        }
-        # 每个一元激活的“实际参与计算的行”：通用行 ∪ 专属行
-        ROWS = {
-            "softmax":   sorted(set(COMMON) | set(SPEC["softmax"])),
-            "layernorm": sorted(set(COMMON) | set(SPEC["layernorm"])),
-            "rmsnorm":   sorted(set(COMMON) | set(SPEC["rmsnorm"])),
-            "silu":      sorted(set(COMMON) | set(SPEC["silu"])),
-            "gelu":      sorted(set(COMMON) | set(SPEC["gelu"])),
-            # 对于 Add/Mul 保持你原策略：仅 46–53 行
-            "addmul":    sorted(set(COMMON) | set(SPEC["addmul"])),
-        }
-        def scatter_unary(op_fn, rows, x_bf16, **kwargs):
-            """只在给定 rows 上计算 op，其他行保持 0。返回与 x 同形状的 bf16 Tensor。"""
-            out = torch.zeros_like(x_bf16)
-            if len(rows) > 0:
-                out[rows] = op_fn(x_bf16[rows], **kwargs)
-            return out
-        def scatter_binary(op_fn, rows, x_bf16, y_bf16, **kwargs):
-            out = torch.zeros_like(x_bf16)
-            if len(rows) > 0:
-                out[rows] = op_fn(x_bf16[rows], y_bf16[rows], **kwargs)
-            return out
+        # ---- Softmax：对整张 X_bf16 计算 ----
+        softmax_ref_bf16 = ref_softmax(X_bf16, dim=1)
+        torch.save(softmax_ref_bf16,              os.path.join(args.outdir, "ref_softmax_bf16.pt"))
+        torch.save(bf16_to_f32(softmax_ref_bf16), os.path.join(args.outdir, "ref_softmax_f32.pt"))
 
-        # ---- Softmax（仅在 ROWS['softmax'] 上算）----
-        softmax_ref_bf16 = scatter_unary(ref_softmax, ROWS["softmax"], X_bf16, dim=1)
-        torch.save(softmax_ref_bf16,               os.path.join(args.outdir, "ref_softmax_bf16.pt"))
-        torch.save(bf16_to_f32(softmax_ref_bf16),  os.path.join(args.outdir, "ref_softmax_f32.pt"))
-
-        # ---- LayerNorm / RMSNorm（仅在各自行上算；eps=1e-5）----
-        ln_ref_bf16  = scatter_unary(ref_layernorm, ROWS["layernorm"], X_bf16, eps=1e-5)
-        rms_ref_bf16 = scatter_unary(ref_rmsnorm,   ROWS["rmsnorm"],   X_bf16, eps=1e-5)
-        torch.save(ln_ref_bf16,              os.path.join(args.outdir, "ref_layernorm_bf16.pt"))
-        torch.save(bf16_to_f32(ln_ref_bf16), os.path.join(args.outdir, "ref_layernorm_f32.pt"))
+        # ---- LayerNorm / RMSNorm（整块，eps=1e-5）----
+        ln_ref_bf16  = ref_layernorm(X_bf16, eps=1e-5)
+        rms_ref_bf16 = ref_rmsnorm(X_bf16,   eps=1e-5)
+        torch.save(ln_ref_bf16,               os.path.join(args.outdir, "ref_layernorm_bf16.pt"))
+        torch.save(bf16_to_f32(ln_ref_bf16),  os.path.join(args.outdir, "ref_layernorm_f32.pt"))
         torch.save(rms_ref_bf16,              os.path.join(args.outdir, "ref_rmsnorm_bf16.pt"))
         torch.save(bf16_to_f32(rms_ref_bf16), os.path.join(args.outdir, "ref_rmsnorm_f32.pt"))
 
-        # ---- SiLU / GELU（仅在各自行上算）----
-        silu_ref_bf16 = scatter_unary(ref_silu, ROWS["silu"], X_bf16)
-        gelu_ref_bf16 = scatter_unary(ref_gelu, ROWS["gelu"], X_bf16, approximate='tanh')
-        torch.save(silu_ref_bf16,              os.path.join(args.outdir, "ref_silu_bf16.pt"))
-        torch.save(bf16_to_f32(silu_ref_bf16), os.path.join(args.outdir, "ref_silu_f32.pt"))
-        torch.save(gelu_ref_bf16,              os.path.join(args.outdir, "ref_gelu_bf16.pt"))
-        torch.save(bf16_to_f32(gelu_ref_bf16), os.path.join(args.outdir, "ref_gelu_f32.pt"))
+        # ---- SiLU / GELU（整块）----
+        silu_ref_bf16 = ref_silu(X_bf16)
+        gelu_ref_bf16 = ref_gelu(X_bf16, approximate='tanh')  # 若你的 ref_gelu 需要该参数
+        torch.save(silu_ref_bf16,               os.path.join(args.outdir, "ref_silu_bf16.pt"))
+        torch.save(bf16_to_f32(silu_ref_bf16),  os.path.join(args.outdir, "ref_silu_f32.pt"))
+        torch.save(gelu_ref_bf16,               os.path.join(args.outdir, "ref_gelu_bf16.pt"))
+        torch.save(bf16_to_f32(gelu_ref_bf16),  os.path.join(args.outdir, "ref_gelu_f32.pt"))
 
-        # ---- Elementwise Add / Mul：仍然仅 46–53 行，其它行置 0 ----
-
-        add_ref_bf16 = scatter_binary(ref_add, ROWS["addmul"], X_bf16, Y_bf16)
-        mul_ref_bf16 = scatter_binary(ref_mul, ROWS["addmul"], X_bf16, Y_bf16)
-        torch.save(add_ref_bf16,                 os.path.join(args.outdir, "ref_add_bf16.pt"))
-        torch.save(mul_ref_bf16,                 os.path.join(args.outdir, "ref_mul_bf16.pt"))
-        torch.save(bf16_to_f32(add_ref_bf16),    os.path.join(args.outdir, "ref_add_f32.pt"))
-        torch.save(bf16_to_f32(mul_ref_bf16),    os.path.join(args.outdir, "ref_mul_f32.pt"))
+        # ---- Elementwise Add / Mul（整块逐元素）----
+        add_ref_bf16 = ref_add(X_bf16, Y_bf16)
+        mul_ref_bf16 = ref_mul(X_bf16, Y_bf16)
+        torch.save(add_ref_bf16,                os.path.join(args.outdir, "ref_add_bf16.pt"))
+        torch.save(mul_ref_bf16,                os.path.join(args.outdir, "ref_mul_bf16.pt"))
+        torch.save(bf16_to_f32(add_ref_bf16),   os.path.join(args.outdir, "ref_add_f32.pt"))
+        torch.save(bf16_to_f32(mul_ref_bf16),   os.path.join(args.outdir, "ref_mul_f32.pt"))
 
         def save_ref_pack(name, t_bf16: torch.Tensor):
             # 1) PyTorch
