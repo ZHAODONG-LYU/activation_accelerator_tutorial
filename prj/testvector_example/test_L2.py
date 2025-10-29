@@ -50,6 +50,8 @@ BIG_VAL = 1e9  # 惩罚用的大数，float32可以安全表达
 nandif_out = np.empty((0, 2))
 nandif_gold = np.empty((0, 2))
 
+bad_count_row = np.zeros(N, dtype=np.int32)
+
 for i in range(0,64):
     for j in range(0,768):
         out = output_f32[i,j]
@@ -60,13 +62,15 @@ for i in range(0,64):
         elif pd.isna(out) and not pd.isna(gold):
             new_out = np.array([[i,j]])   # 注意这里要是二维形状 (1, 2)
             nandif_out = np.vstack((nandif_out, new_out))
-            output_f32[i,j] = BIG_VAL
+            bad_count_row[i] += 1
+            output_f32[i,j] = 0
             golden_f32[i,j] = 0 
         elif not pd.isna(out) and pd.isna(gold):
             new_gold = np.array([[i,j]])
             nandif_gold = np.vstack((nandif_gold, new_gold))
+            bad_count_row[i] += 1
             output_f32[i,j] = 0
-            golden_f32[i,j] = BIG_VAL
+            golden_f32[i,j] = 0
 
 df_nandif_out = pd.DataFrame(nandif_out)
 df_nandif_gold = pd.DataFrame(nandif_gold)
@@ -85,9 +89,10 @@ for i in range(0,64):
         gold = golden_f32[i,j]
         if np.isinf(out) and np.isinf(gold):
             if out != gold:
+                bad_count_row[i] += 1
                 new_sign= np.array([[i,j]]) 
                 infdif_sign = np.vstack((infdif_sign, new_sign))
-                output_f32[i, j] = BIG_VAL
+                output_f32[i, j] = 0
                 golden_f32[i, j] = 0.0
             else:
                 output_f32[i,j] = 0
@@ -95,13 +100,15 @@ for i in range(0,64):
         elif np.isinf(out) and not np.isinf(gold):
             new_out = np.array([[i,j]])   # 注意这里要是二维形状 (1, 2)
             infdif_out = np.vstack((infdif_out, new_out))
-            output_f32[i,j] = BIG_VAL
+            bad_count_row[i] += 1
+            output_f32[i,j] = 0
             golden_f32[i,j] = 0 
         elif not np.isinf(out) and np.isinf(gold):
             new_gold = np.array([[i,j]])
             infdif_gold = np.vstack((infdif_gold, new_gold))
+            bad_count_row[i] += 1
             output_f32[i,j] = 0
-            golden_f32[i,j] = BIG_VAL
+            golden_f32[i,j] = 0
 
 df_infdif_out = pd.DataFrame(infdif_out)
 df_infdif_gold = pd.DataFrame(infdif_gold)
@@ -131,8 +138,13 @@ def calculate_point(error_true):
 for f in range(N):
     numerator = np.linalg.norm(output_f32[f] - golden_f32[f], ord=2)
     denominator = np.linalg.norm(golden_f32[f] , ord=2) + eps
-    errors_per_row.append(numerator / denominator)
-    errors_point_per_row.append(calculate_point(errors_per_row[f]))
+    rel_err = numerator / denominator
+    base_score = calculate_point(rel_err)
+    penalty = bad_count_row[f] / D
+    final_score = max(0.0, base_score - penalty)
+
+    errors_per_row.append(rel_err)
+    errors_point_per_row.append(final_score)
 
 # #计算总误差和总评分
 # numerator_all   = np.linalg.norm(output_f32 - golden_f32, ord=2)
