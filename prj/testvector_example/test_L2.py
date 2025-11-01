@@ -3,11 +3,11 @@ import pandas as pd
 
 #启动方式：python test_error.py
 
-config = "0"
+config = "5"
 
 N, D = 64, 768
-path_output= "/data1/jcz/fpt_LLM/prj/testvector_example/bf16_vectors3/hls_output_config_" + config + ".bin"
-path_golden = "/data1/jcz/fpt_LLM/prj/testvector_example/bf16_vectors3/golden_out_config_"+ config + "_bf16.bin"
+path_output= "/home/jicz/fpt_LLM/prj/testvector_example/bf16_vectors/hls_output_config_" + config + ".bin"
+path_golden = "/home/jicz/fpt_LLM/prj/testvector_example/bf16_vectors/golden_out_config_"+ config + "_bf16.bin"
 
 
 # 读作 uint16 并 reshape
@@ -74,8 +74,8 @@ for i in range(0,64):
 
 df_nandif_out = pd.DataFrame(nandif_out)
 df_nandif_gold = pd.DataFrame(nandif_gold)
-df_nandif_out.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/df_nandif_out_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
-df_nandif_gold.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/df_nandif_gold_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_nandif_out.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/df_nandif_out_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_nandif_gold.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/df_nandif_gold_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
 
 
 #判断inf分布情况并输出结果，并将所有inf置零
@@ -113,9 +113,9 @@ for i in range(0,64):
 df_infdif_out = pd.DataFrame(infdif_out)
 df_infdif_gold = pd.DataFrame(infdif_gold)
 df_infdif_sign = pd.DataFrame(infdif_sign)
-df_infdif_out.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_out_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
-df_infdif_gold.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_gold_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
-df_infdif_sign.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_sign_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_infdif_out.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_out_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_infdif_gold.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_gold_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_infdif_sign.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/df_infdif_sign_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
 
 #误差计算并计算精度得分
 errors_per_row = []
@@ -136,6 +136,14 @@ def calculate_point(error_true):
    
 #计算每行的真实误差和每行的评分
 for f in range(N):
+    # row_out  = output_f32[f]    # 形状: (D,)
+    # row_gold = golden_f32[f]    # 形状: (D,)
+    # rel_err_vec = np.abs(row_out - row_gold) / (np.abs(row_gold) + eps)   #计算向量中每个元素的相对误差 (D,)
+    # base_scores = np.vectorize(calculate_point, otypes=[float])(rel_err_vec) # 依次计算每个元素的评分 (D,)
+    # final_scores_vec = np.maximum(0.0, base_scores)
+    # row_score = final_scores_vec.mean() - (bad_count_row[f] / D)
+    # final_score = max(0.0, row_score)
+
     numerator = np.linalg.norm(output_f32[f] - golden_f32[f], ord=2)
     denominator = np.linalg.norm(golden_f32[f] , ord=2) + eps
     rel_err = numerator / denominator
@@ -144,6 +152,7 @@ for f in range(N):
     final_score = max(0.0, base_score - penalty)
 
     errors_per_row.append(rel_err)
+    # errors_per_row.append(rel_err_vec.mean())
     errors_point_per_row.append(final_score)
 
 # #计算总误差和总评分
@@ -171,10 +180,10 @@ df_error_point = pd.DataFrame(errors_point_per_row)
 # print("总评分：", errors_point)
 
 # 将DataFrame输出为Excel文件
-#df_error.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/errors_per_row_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
-#df_error_point.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/errors_point_per_row_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+#df_error.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/errors_per_row_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+#df_error_point.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/errors_point_per_row_config_"+ config +".csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
 
 #输出使用进位算法的结果
-df_error.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/errors_per_row_config_"+ config +"_round.csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
-df_error_point.to_csv("/data1/jcz/fpt_LLM/prj/seedata/config_"+ config +"/errors_point_per_row_config_"+ config +"_round.csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_error.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/errors_per_row_config_"+ config +"_round.csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
+df_error_point.to_csv("/home/jicz/fpt_LLM/prj/seedata/config_"+ config +"/errors_point_per_row_config_"+ config +"_round.csv", index=False, header=False)  # index=False 去掉行号，header=False 去掉列名
 

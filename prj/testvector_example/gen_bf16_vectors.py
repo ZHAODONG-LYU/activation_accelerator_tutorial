@@ -523,10 +523,10 @@ def ref_gelu(x_bf16: torch.Tensor, approximate: str = "tanh") -> torch.Tensor:
     return F.gelu(x_bf16.to(torch.float32), approximate=approximate).to(torch.bfloat16)
 
 def ref_add(x_bf16: torch.Tensor, y_bf16: torch.Tensor) -> torch.Tensor:
-    return torch.add(x_bf16.to(torch.float32), y_bf16.to(torch.float32)).to(torch.bfloat16)
+    return torch.add(x_bf16.to(torch.bfloat16), y_bf16.to(torch.bfloat16))
 
 def ref_mul(x_bf16: torch.Tensor, y_bf16: torch.Tensor) -> torch.Tensor:
-    return torch.mul(x_bf16.to(torch.float32), y_bf16.to(torch.float32)).to(torch.bfloat16)
+    return torch.mul(x_bf16.to(torch.bfloat16), y_bf16.to(torch.bfloat16))
 # ------------------------------
 # 主流程
 # ------------------------------
@@ -631,10 +631,10 @@ def main():
                 torch.save(bf16_to_f32(t_bf16), os.path.join(outdir, f"golden_out_config_{config_idx}_f32.pt"))
         OP2CFG = {
             "softmax":    0,
-            "silu":       1,
+            "layernorm":  1,
             "rmsnorm":    2,
-            "layernorm":  3,
-            "gelu":       4, 
+            "silu":       3,
+            "gelu":       4,
             "add":        5,
             "mul":        6,      # 同上
         }
@@ -663,7 +663,9 @@ def main():
         if "mul" in OP2CFG:
             save_as_golden(OP2CFG["mul"], mul_ref_bf16, args.outdir, also_pt_f32=False)
 
-
+        print("\n[Golden Map]")
+        for op, idx in sorted(OP2CFG.items(), key=lambda kv: kv[1]):
+            print(f"  golden{idx}  <=  {op}")
         print("[OK] Saved PyTorch reference outputs (bf16 & f32).")
 
     # 6) 简要报告
